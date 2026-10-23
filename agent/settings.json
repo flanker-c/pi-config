@@ -1,0 +1,24 @@
+{
+  "lastChangelogVersion": "1.4.0",
+  "theme": "dark",
+  "defaultProvider": "openai",
+  "defaultModel": "gpt-6-luna",
+  "defaultThinkingLevel": "medium",
+  "deviceId": "d67589a9-169a-46de-a397-2be52dd8226e",
+  "defaultTools": [
+    "+codemode",
+    "+tool_search"
+  ],
+  "enabledModels": [
+    "openai/gpt-6-luna",
+    "openai/gpt-6-sol",
+    "openai/gpt-6.1-sol",
+    "deepseek/deepseek-flash",
+    "deepseek/deepseek-v4-pro"
+  ],
+  "enableInstallTelemetry": false,
+  "packages": [
+    "npm:pi-subagents",
+    "npm:pi-web-access"
+  ]
+}
