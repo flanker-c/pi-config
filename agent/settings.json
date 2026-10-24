@@ -20,6 +20,7 @@
   "packages": [
     "npm:pi-subagents",
     "npm:pi-web-access",
-    "npm:@narumitw/pi-usage"
+    "npm:@narumitw/pi-usage",
+    "npm:pi-hashline-edit-pro"
   ]
 }
