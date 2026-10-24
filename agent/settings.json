@@ -3,7 +3,7 @@
   "theme": "dark",
   "defaultProvider": "openai",
   "defaultModel": "gpt-6-luna",
-  "defaultThinkingLevel": "medium",
+  "defaultThinkingLevel": "high",
   "deviceId": "d67589a9-169a-46de-a397-2be52dd8226e",
   "defaultTools": [
     "+codemode",
@@ -19,6 +19,7 @@
   "enableInstallTelemetry": false,
   "packages": [
     "npm:pi-subagents",
-    "npm:pi-web-access"
+    "npm:pi-web-access",
+    "npm:@narumitw/pi-usage"
   ]
 }
