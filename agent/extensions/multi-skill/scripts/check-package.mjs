@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+const root = fileURLToPath(new URL('../', import.meta.url));
+const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const output = JSON.parse(execFileSync(npm, ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: root, encoding: 'utf8' }));
+const [result] = Array.isArray(output) ? output : Object.values(output);
+const paths = result.files.map(file => file.path);
+for (const required of ['index.ts', 'core.ts', 'autocomplete.ts', 'renderer.ts', 'package.json', 'README.md']) assert.ok(paths.includes(required), 'Missing package file: ' + required);
+assert.ok(paths.every(path => !path.startsWith('node_modules/') && !path.startsWith('tests/') && !path.endsWith('.tgz')), 'Unexpected development artifacts');
+console.log('Package contents verified:', paths.join(', '));
