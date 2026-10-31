@@ -1,5 +1,5 @@
 import { Type } from "typebox";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionUIContext } from "@earendil-works/pi-coding-agent";
 import { Editor, type EditorTheme, Key, matchesKey, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { createQuestionFlow, type QuestionFlowEvent } from "./logic.ts";
 
@@ -53,7 +53,7 @@ export default function askUserQuestions(pi: ExtensionAPI) {
 		executionMode: "sequential",
 
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			if (!ctx.hasUI) {
+			if (!ctx.hasUI || (ctx.mode !== "tui" && ctx.mode !== "rpc")) {
 				return {
 					content: [{ type: "text", text: "Cannot ask the user questions: no interactive UI is available." }],
 					details: { answers: [], cancelled: false },
@@ -69,7 +69,8 @@ export default function askUserQuestions(pi: ExtensionAPI) {
 				).filter((option) => option.label.trim().length > 0),
 			}));
 
-			const result = await ctx.ui.custom<{ answers: Answer[]; cancelled: boolean }>((tui, theme, _kb, done) => {
+			const result = ctx.mode === "tui"
+				? await ctx.ui.custom<{ answers: Answer[]; cancelled: boolean }>((tui, theme, _kb, done) => {
 				const submitTab = questions.length;
 				const flow = createQuestionFlow(questions);
 				let { currentTab, optionIndex, answers } = flow.snapshot();
@@ -304,7 +305,8 @@ export default function askUserQuestions(pi: ExtensionAPI) {
 					invalidate: () => { cachedLines = undefined; editor.invalidate(); },
 					handleInput,
 				};
-			});
+				})
+				: await collectRpcAnswers(ctx.ui, questions);
 
 			return {
 				content: [{
@@ -327,4 +329,103 @@ function formatAnswers(answers: Answer[]): string {
 	return answers
 		.map(({ label, answer, recommended }) => `${label}: ${Array.isArray(answer) ? answer.join(", ") : answer}${recommended ? " (recommended)" : ""}`)
 		.join("\n");
+}
+
+interface NormalizedQuestion {
+	question: string;
+	label: string;
+	multi: boolean;
+	options: Array<{ label: string; recommended?: boolean }>;
+}
+
+async function collectRpcAnswers(
+	ui: ExtensionUIContext,
+	questions: NormalizedQuestion[],
+): Promise<{ answers: Answer[]; cancelled: boolean }> {
+	const answers: Answer[] = [];
+
+	for (const question of questions) {
+		if (question.options.length === 0) {
+			let answer: string | undefined;
+			while (!answer?.trim()) {
+				answer = await ui.editor(`${question.label}: ${question.question}`);
+				if (answer === undefined) return { answers, cancelled: true };
+			}
+			answers.push({ question: question.question, label: question.label, answer: answer.trim(), recommended: false });
+			continue;
+		}
+
+		if (question.multi) {
+			const selected = new Set<number>();
+			while (true) {
+				const menu = [
+					`Done${selected.size > 0 ? ` (${selected.size} selected)` : ""}`,
+					...question.options.map((option, index) =>
+						`${index + 1}. ${selected.has(index) ? "✓" : "○"} ${option.label}${option.recommended ? " ★ Recommended" : ""}`,
+					),
+				];
+				const choice = await ui.select(
+					`${question.label}: ${question.question}\nSelect options; choose Done when finished.`,
+					menu,
+				);
+				if (choice === undefined) {
+					if (selected.size > 0) {
+						const chosen = [...selected].sort((a, b) => a - b).map((index) => question.options[index]);
+						answers.push({
+							question: question.question,
+							label: question.label,
+							answer: chosen.map((option) => option.label),
+							recommended: chosen.some((option) => option.recommended),
+						});
+					}
+					return { answers, cancelled: true };
+				}
+				const choiceIndex = menu.indexOf(choice);
+				if (choiceIndex === 0) {
+					if (selected.size === 0) continue;
+					const chosen = [...selected].sort((a, b) => a - b).map((index) => question.options[index]);
+					answers.push({
+						question: question.question,
+						label: question.label,
+						answer: chosen.map((option) => option.label),
+						recommended: chosen.some((option) => option.recommended),
+					});
+					break;
+				}
+				if (choiceIndex > 0) {
+					const optionIndex = choiceIndex - 1;
+					if (selected.has(optionIndex)) selected.delete(optionIndex);
+					else selected.add(optionIndex);
+				}
+			}
+			continue;
+		}
+
+		const menu = [
+			...question.options.map((option, index) => `${index + 1}. ${option.label}${option.recommended ? " ★ Recommended" : ""}`),
+			"Other (type an answer…)",
+		];
+		const choice = await ui.select(`${question.label}: ${question.question}`, menu);
+		if (choice === undefined) return { answers, cancelled: true };
+
+		let answer: string | undefined;
+		let recommended = false;
+		const optionIndex = menu.indexOf(choice);
+		if (optionIndex === question.options.length) {
+			while (!answer?.trim()) {
+				answer = await ui.input(`${question.label}: ${question.question}`, "Type your answer");
+				if (answer === undefined) return { answers, cancelled: true };
+			}
+		} else if (optionIndex >= 0) {
+			answer = question.options[optionIndex].label;
+			recommended = question.options[optionIndex].recommended === true;
+		}
+		if (answer !== undefined) {
+			answers.push({ question: question.question, label: question.label, answer: answer.trim(), recommended });
+		}
+	}
+
+	const summary = formatAnswers(answers);
+	const confirmed = await ui.confirm("Review your answers", summary);
+	return { answers, cancelled: !confirmed };
 }

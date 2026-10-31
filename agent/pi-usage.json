@@ -1,3 +1,4 @@
 {
-  "codexStatusPercentage": "remaining"
+  "codexStatusPercentage": "remaining",
+  "openaiUseCodexUsage": true
 }
